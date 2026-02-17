@@ -75,9 +75,87 @@ Built using the MERN stack with a modern animated SaaS-style UI.
 
 habit-tracker/
 │
-├── frontend/ # React Frontend
-├── backend/ # Express Backend
+├── backend/
+│   │
+│   ├── config/
+│   │     └── db.js
+│   │
+│   ├── controllers/
+│   │     ├── authController.js
+│   │     └── habitController.js
+│   │
+│   ├── middleware/
+│   │     ├── authMiddleware.js
+│   │     ├── validate.js
+│   │     └── errorHandler.js
+│   │
+│   ├── models/
+│   │     ├── User.js
+│   │     └── Habit.js
+│   │
+│   ├── routes/
+│   │     ├── authRoutes.js
+│   │     └── habitRoutes.js
+│   │
+│   ├── utils/
+│   │     └── sendEmail.js
+│   │
+│   ├── .env
+│   ├── server.js
+│   ├── package.json
+│   └── package-lock.json
+│
+├── frontend/
+│   │
+│   ├── public/
+│   │     ├── index.html
+│   │     ├── favicon.ico
+│   │     └── manifest.json
+│   │
+│   ├── src/
+│   │     │
+│   │     ├── assets/
+│   │     │     └── logo.png (optional)
+│   │     │
+│   │     ├── components/
+│   │     │     ├── AddHabitModal.jsx
+│   │     │     ├── Navbar.jsx
+│   │     │     ├── Sidebar.jsx
+│   │     │     └── ThemeToggle.jsx
+│   │     │
+│   │     ├── context/
+│   │     │     ├── AuthContext.jsx
+│   │     │     └── ThemeContext.jsx
+│   │     │
+│   │     ├── hooks/
+│   │     │     └── useHabits.js (optional)
+│   │     │
+│   │     ├── layouts/
+│   │     │     └── DashboardLayout.jsx
+│   │     │
+│   │     ├── pages/
+│   │     │     ├── Dashboard.jsx
+│   │     │     ├── Login.jsx
+│   │     │     ├── Signup.jsx
+│   │     │     └── Stats.jsx
+│   │     │
+│   │     ├── services/
+│   │     │     └── api.js
+│   │     │
+│   │     ├── utils/
+│   │     │     ├── weekUtils.js
+│   │     │     └── streakUtils.js (optional)
+│   │     │
+│   │     ├── App.js
+│   │     ├── index.js
+│   │     └── index.css
+│   │
+│   ├── package.json
+│   └── package-lock.json
+│
+├── .gitignore
 └── README.md
+
 
 
 ---
@@ -87,7 +165,7 @@ habit-tracker/
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/your-username/habit-tracker.git
+git clone https://github.com/ramklk/Smart-Habit-Tracker-Streak-System.git
 cd habit-tracker
 
 
