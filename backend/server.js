@@ -7,11 +7,11 @@ const cors = require("cors");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 
-const connectDB = require("./config/db");
-const Habit = require("./models/Habit");
-const User = require("./models/User");
-const sendReminderEmail = require("./utils/sendEmail");
-const errorHandler = require("./middleware/errorHandler");
+const connectDB = require("./config/db.js");
+const Habit = require("./models/Habit.js");
+const User = require("./models/User.js");
+const sendReminderEmail = require("./utils/sendEmail.js");
+const errorHandler = require("./middleware/errorHandler.js");
 
 // =========================
 // 1️⃣ Load Environment Variables
@@ -45,8 +45,8 @@ app.use(limiter);
 // =========================
 // 5️⃣ Routes
 // =========================
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/habits", require("./routes/habitroutes"));
+app.use("/api/auth", require("./routes/authRoutes.js"));
+app.use("/api/habits", require("./routes/habitroutes.js"));
 
 // Health Check Route
 app.get("/", (req, res) => {
