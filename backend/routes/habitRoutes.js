@@ -6,9 +6,9 @@ const {
   getUserHabits,
   markHabitDone,
   deleteHabit
-} = require("../controllers/habitcontroller.js");
+} = require("../controllers/habitController.js");
 
-const { getStats } = require("../controllers/habitcontroller.js");
+const { getStats } = require("../controllers/habitController.js");
 
 const authMiddleware = require("../middleware/authMiddleware.js");
 
