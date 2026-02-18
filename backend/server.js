@@ -46,7 +46,7 @@ app.use(limiter);
 // 5️⃣ Routes
 // =========================
 app.use("/api/auth", require("./routes/authRoutes.js"));
-app.use("/api/habits", require("./routes/habitroutes.js"));
+app.use("/api/habits", require("./routes/habitRoutes.js"));
 
 // Health Check Route
 app.get("/", (req, res) => {
