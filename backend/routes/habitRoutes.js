@@ -1,42 +1,15 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../middleware/authMiddleware");
+const habitController = require("../controllers/habitController");
 
-const {
-  createHabit,
-  getUserHabits,
-  markHabitDone,
-  deleteHabit
-} = require("../controllers/habitController.js");
-
-const { getStats } = require("../controllers/habitController.js");
-
-const authMiddleware = require("../middleware/authMiddleware.js");
-
-
-/**
- * 📝 Create New Habit
- * POST /api/habits
- */
-router.post("/", authMiddleware, createHabit);
-
-/**
- * 📋 Get All Habits of Logged-in User
- * GET /api/habits
- */
-router.get("/", authMiddleware, getUserHabits);
-
-router.get("/stats", authMiddleware, getStats);
-
-/**
- * 🔥 Mark Habit as Done (Check-in)
- * POST /api/habits/:id/checkin
- */
-router.post("/:id/checkin", authMiddleware, markHabitDone);
-
-/**
- * ❌ Delete Habit
- * DELETE /api/habits/:id
- */
-router.delete("/:id", authMiddleware, deleteHabit);
+router.post("/", authMiddleware, habitController.createHabit);
+router.get("/", authMiddleware, habitController.getHabits);
+router.put("/:id/checkin", authMiddleware, habitController.checkInHabit);
+router.delete("/:id", authMiddleware, habitController.deleteHabit);
+router.get("/:id/weekly", authMiddleware, habitController.getWeeklyStats);
+router.get("/:id/monthly", authMiddleware, habitController.getMonthlyStats);
+router.get("/:id/last30", authMiddleware, habitController.getLast30DaysData);
+router.get("/stats", authMiddleware, habitController.getOverallStats);
 
 module.exports = router;

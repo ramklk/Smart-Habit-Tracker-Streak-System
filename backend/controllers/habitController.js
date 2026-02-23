@@ -1,168 +1,264 @@
-const Habit = require("../models/Habit.js");
+const db = require("../config/db");
 
-/**
- * 📝 Create Habit
- */
+// ==============================
+// Create Habit
+// ==============================
 exports.createHabit = async (req, res) => {
   try {
     const { title } = req.body;
+    const userId = req.user.id;
 
-    const habit = await Habit.create({
-      userId: req.user.id,
-      title,
-      completedDates: []
-    });
+    await db.execute(
+      "INSERT INTO habits (user_id, title) VALUES (?, ?)",
+      [userId, title]
+    );
 
-    res.status(201).json(habit);
+    res.status(201).json({ message: "Habit created successfully" });
 
   } catch (error) {
-    res.status(500).json({ message: "Error creating habit", error });
+    res.status(500).json({ message: error.message });
   }
 };
 
-
-/**
- * 📋 Get All Habits of Logged-in User
- */
-exports.getUserHabits = async (req, res) => {
+// ==============================
+// Get User Habits
+// ==============================
+exports.getHabits = async (req, res) => {
   try {
-    const habits = await Habit.find({ userId: req.user.id });
+    const userId = req.user.id;
 
-    res.status(200).json(habits);
+    const [rows] = await db.execute(
+      "SELECT * FROM habits WHERE user_id = ?",
+      [userId]
+    );
+
+    res.json(rows);
 
   } catch (error) {
-    res.status(500).json({ message: "Error fetching habits", error });
+    res.status(500).json({ message: error.message });
   }
 };
 
+// ==============================
+// Check-In Habit (Transaction Version)
+// ==============================
+exports.checkInHabit = async (req, res) => {
+  const connection = await db.getConnection();
 
-/**
- * 🔥 Mark Habit as Done (Check-in)
- */
-exports.markHabitDone = async (req, res) => {
   try {
-    const habit = await Habit.findById(req.params.id);
+    const { id } = req.params;
+    const today = new Date().toISOString().split("T")[0];
 
-    if (!habit) {
-      return res.status(404).json({ message: "Habit not found" });
-    }
+    await connection.beginTransaction();
 
-    // ✅ Ownership Check
-    if (habit.userId.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Unauthorized access" });
-    }
+    // Check if today already completed
+    const [existing] = await connection.execute(
+      "SELECT * FROM habit_logs WHERE habit_id = ? AND completed_date = ?",
+      [id, today]
+    );
 
-    const today = new Date().toDateString();
-    const lastDate = habit.completedDates.slice(-1)[0];
-
-    if (lastDate && new Date(lastDate).toDateString() === today) {
-      return res.status(400).json({ message: "Already marked today" });
-    }
-
-    if (lastDate) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (new Date(lastDate).toDateString() === yesterday.toDateString()) {
-        habit.currentStreak += 1;
-      } else {
-        habit.currentStreak = 1;
-      }
+    if (existing.length > 0) {
+      // 🔥 UNCHECK
+      await connection.execute(
+        "DELETE FROM habit_logs WHERE habit_id = ? AND completed_date = ?",
+        [id, today]
+      );
     } else {
-      habit.currentStreak = 1;
+      // 🔥 CHECK
+      await connection.execute(
+        "INSERT INTO habit_logs (habit_id, completed_date) VALUES (?, ?)",
+        [id, today]
+      );
     }
 
-    if (habit.currentStreak > habit.longestStreak) {
-      habit.longestStreak = habit.currentStreak;
+    // Get all logs ordered DESC
+    const [logs] = await connection.execute(
+      "SELECT completed_date FROM habit_logs WHERE habit_id = ? ORDER BY completed_date DESC",
+      [id]
+    );
+
+    let streak = 0;
+    let currentDate = new Date(today);
+
+    for (let log of logs) {
+      const logDate = new Date(log.completed_date);
+
+      if (logDate.toDateString() === currentDate.toDateString()) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        break;
+      }
     }
 
-    habit.completedDates.push(new Date());
-    await habit.save();
+    // Determine last completed date
+    const lastCompleted = logs.length > 0 ? logs[0].completed_date : null;
 
-    res.json(habit);
+    await connection.execute(
+      `UPDATE habits
+       SET current_streak = ?,
+           longest_streak = GREATEST(longest_streak, ?),
+           last_completed = ?
+       WHERE id = ?`,
+      [streak, streak, lastCompleted, id]
+    );
+
+    await connection.commit();
+
+    res.json({ message: "Habit toggled", streak });
 
   } catch (error) {
-    res.status(500).json({ message: "Error updating streak", error });
+    await connection.rollback();
+    res.status(500).json({ message: error.message });
+  } finally {
+    connection.release();
   }
 };
 
-
-
-/**
- * ❌ Delete Habit
- */
+// ==============================
+// Delete Habit
+// ==============================
 exports.deleteHabit = async (req, res) => {
   try {
-    const habit = await Habit.findById(req.params.id);
+    const { id } = req.params;
+    const userId = req.user.id;
 
-    if (!habit) {
+    const [result] = await db.execute(
+      "DELETE FROM habits WHERE id = ? AND user_id = ?",
+      [id, userId]
+    );
+
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Habit not found" });
     }
-
-    // ✅ Ownership Check
-    if (habit.userId.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Unauthorized access" });
-    }
-
-    await habit.deleteOne();
 
     res.json({ message: "Habit deleted successfully" });
 
   } catch (error) {
-    res.status(500).json({ message: "Error deleting habit", error });
+    res.status(500).json({ message: error.message });
+  }
+};
+// ==============================
+// Weekly Stats
+// ==============================
+exports.getWeeklyStats = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await db.execute(
+      `SELECT DATE_FORMAT(completed_date, '%Y-%m-%d') AS completed_date
+       FROM habit_logs
+       WHERE habit_id = ?
+       AND completed_date >= CURDATE() - INTERVAL 7 DAY`,
+      [id]
+    );
+
+    // Return ARRAY of dates
+    res.json(rows);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ==============================
+// Monthly Stats
+// ==============================
+exports.getMonthlyStats = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await db.execute(
+      `SELECT COUNT(*) AS totalCompleted
+       FROM habit_logs
+       WHERE habit_id = ?
+       AND MONTH(completed_date) = MONTH(CURDATE())
+       AND YEAR(completed_date) = YEAR(CURDATE())`,
+      [id]
+    );
+
+    res.json(rows[0]);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ==============================
+// Last 30 Days Data
+// ==============================
+exports.getLast30DaysData = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await db.execute(
+      `SELECT completed_date
+       FROM habit_logs
+       WHERE habit_id = ?
+       AND completed_date >= CURDATE() - INTERVAL 30 DAY
+       ORDER BY completed_date ASC`,
+      [id]
+    );
+
+    res.json(rows);
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
 
-
-exports.getStats = async (req, res) => {
+exports.getOverallStats = async (req, res) => {
   try {
-    const habits = await Habit.find({ userId: req.user.id });
+    const userId = req.user.id;
 
-    const today = new Date();
-    const weekAgo = new Date();
-    const monthAgo = new Date();
+    // Total habits
+    const [totalHabitsResult] = await db.execute(
+      "SELECT COUNT(*) AS total FROM habits WHERE user_id = ?",
+      [userId]
+    );
 
-    weekAgo.setDate(today.getDate() - 7);
-    monthAgo.setDate(today.getDate() - 30);
+    const totalHabits = totalHabitsResult[0].total;
 
-    let totalHabits = habits.length;
-    let totalCompletions = 0;
-    let weeklyCompletions = 0;
-    let monthlyCompletions = 0;
+    // Weekly completions
+    const [weeklyResult] = await db.execute(
+      `SELECT COUNT(*) AS total
+       FROM habit_logs hl
+       JOIN habits h ON hl.habit_id = h.id
+       WHERE h.user_id = ?
+       AND hl.completed_date >= CURDATE() - INTERVAL 7 DAY`,
+      [userId]
+    );
 
-    habits.forEach(habit => {
-      habit.completedDates.forEach(date => {
-        totalCompletions++;
+    const weeklyCompletions = weeklyResult[0].total;
 
-        if (new Date(date) >= weekAgo) {
-          weeklyCompletions++;
-        }
+    // Monthly completions
+    const [monthlyResult] = await db.execute(
+      `SELECT COUNT(*) AS total
+       FROM habit_logs hl
+       JOIN habits h ON hl.habit_id = h.id
+       WHERE h.user_id = ?
+       AND MONTH(hl.completed_date) = MONTH(CURDATE())
+       AND YEAR(hl.completed_date) = YEAR(CURDATE())`,
+      [userId]
+    );
 
-        if (new Date(date) >= monthAgo) {
-          monthlyCompletions++;
-        }
-      });
-    });
+    const monthlyCompletions = monthlyResult[0].total;
 
-    const successRate = totalHabits === 0
-      ? 0
-      : ((weeklyCompletions / (7 * totalHabits)) * 100).toFixed(2);
+    // Success rate (simple logic)
+    const successRate =
+      totalHabits > 0
+        ? Math.round((weeklyCompletions / (totalHabits * 7)) * 100)
+        : 0;
 
     res.json({
       totalHabits,
-      totalCompletions,
       weeklyCompletions,
       monthlyCompletions,
-      successRate: Number(successRate),
-      habits: habits.map(habit => ({
-        title: habit.title,
-        currentStreak: habit.currentStreak,
-        longestStreak: habit.longestStreak
-      }))
+      successRate,
     });
 
   } catch (error) {
-    res.status(500).json({ message: "Error fetching stats", error });
+    res.status(500).json({ message: error.message });
   }
 };
